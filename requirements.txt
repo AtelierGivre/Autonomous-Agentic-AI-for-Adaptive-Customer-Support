@@ -1,0 +1,17 @@
+# --- Agent framework / LLM ---
+langchain-core>=0.3
+langchain-openai>=0.3        # AzureChatOpenAI + ChatOpenAI
+
+# --- Retrieval: LlamaIndex + FAISS + Hugging Face embeddings ---
+llama-index-core>=0.12
+llama-index-vector-stores-faiss>=0.3
+llama-index-embeddings-huggingface>=0.5
+faiss-cpu>=1.8
+
+# --- MCP (tool protocol). Pinned to 1.x: 2.x renamed FastMCP ---
+mcp>=1.9,<2
+
+# --- API / config ---
+fastapi>=0.110
+uvicorn>=0.29
+python-dotenv>=1.0
