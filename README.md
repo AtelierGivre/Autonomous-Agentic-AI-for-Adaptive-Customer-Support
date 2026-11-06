@@ -523,21 +523,4 @@ Review documentation:
 
 Further details: `docs/ARCHITECTURE.md`, Section 6, and `docs/LOCAL_MODELS.md`.
 
-## 15. Technology Versions
-
-Developed using Python 3.12 (Python 3.11+ supported).
-
-| Technology | Version |
-|---|---|
-| `langchain-core` | 1.7 |
-| `langchain-openai` | 1.7 |
-| `llama-index-core` | 0.14 |
-| `llama-index-vector-stores-faiss` | 0.7 |
-| `faiss-cpu` | 1.15 |
-| `mcp` | 1.30 |
-| `fastapi` | 0.162 |
-| `pydantic` | 2.14 |
-
----
-
 **Core Technologies:** Python · LangChain · LlamaIndex · Hugging Face · FAISS · BM25 · MCP · FastAPI · SQLite · Azure · Docker · Prometheus
