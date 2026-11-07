@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from agents_app.config import Settings
 from agents_app.rag import KnowledgeBase, tokenize
 
@@ -11,6 +13,9 @@ def _settings(**overrides) -> Settings:
     settings.min_lexical_coverage = 0.3
     settings.chunk_size = 400
     settings.chunk_overlap = 40
+    settings.vector_store = "builtin"
+    settings.ingest_backend = "builtin"
+    settings.persist_index = False
     for key, value in overrides.items():
         setattr(settings, key, value)
     return settings
@@ -85,3 +90,70 @@ def test_empty_knowledge_base_is_not_ready(tmp_path):
     kb = KnowledgeBase(_settings(), kb_dir=str(tmp_path))
     assert kb.is_ready() is False
     assert kb.search("anything") == []
+
+
+# ------------------------------------------------------------------ backends
+def test_faiss_backend_matches_builtin(tmp_path):
+    pytest.importorskip("faiss")
+    index_dir = tmp_path / "index"
+    builtin = _kb(tmp_path)
+    faiss_kb = _kb(
+        tmp_path,
+        vector_store="faiss",
+        index_dir=str(index_dir),
+        persist_index=True,
+    )
+
+    assert faiss_kb.stats()["vector_store"] == "faiss"
+    assert faiss_kb.stats()["ingest_backend"] == "builtin"
+    assert (index_dir / "index.faiss").exists()
+    assert (index_dir / "index.meta.json").exists()
+
+    for query in ("How long do refunds take?", "delivery time", "refund payment method"):
+        expected = builtin.search(query)
+        actual = faiss_kb.search(query)
+        assert [row["source"] for row in actual] == [row["source"] for row in expected]
+        assert [row["score"] for row in actual] == pytest.approx(
+            [row["score"] for row in expected], abs=1e-4
+        )
+
+
+def test_faiss_index_is_reused_after_restart(tmp_path):
+    pytest.importorskip("faiss")
+    index_dir = tmp_path / "index"
+    first = _kb(
+        tmp_path,
+        vector_store="faiss",
+        index_dir=str(index_dir),
+        persist_index=True,
+    )
+    second = _kb(
+        tmp_path,
+        vector_store="faiss",
+        index_dir=str(index_dir),
+        persist_index=True,
+    )
+
+    assert second.stats()["index"]["persisted"] is True
+    assert second.stats()["index"]["vectors"] == len(second.chunks)
+    assert [row["source"] for row in second.search("refunds")] == [
+        row["source"] for row in first.search("refunds")
+    ]
+
+
+def test_llamaindex_ingest_backend_chunks_and_retrieves(tmp_path):
+    pytest.importorskip("llama_index")
+    kb = _kb(tmp_path, ingest_backend="llamaindex")
+
+    assert kb.stats()["ingest_backend"] == "llamaindex"
+    assert kb.chunks
+    assert all(len(chunk.text) <= 400 for chunk in kb.chunks)
+    results = kb.search("How long do refunds take?")
+    assert results[0]["source"] == "refunds.md"
+
+
+def test_unknown_backends_fall_back_to_builtin(tmp_path):
+    kb = _kb(tmp_path, vector_store="not-a-store", ingest_backend="not-a-chunker")
+    assert kb.stats()["vector_store"] == "builtin"
+    assert kb.stats()["ingest_backend"] == "builtin"
+    assert kb.is_ready() is True

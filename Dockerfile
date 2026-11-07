@@ -7,10 +7,15 @@ WORKDIR /app
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 app
 
-COPY requirements.txt requirements-local.txt ./
+COPY requirements.txt requirements-local.txt requirements-rag.txt ./
 # CPU-only torch: the default PyPI wheel bundles CUDA libraries (+2 GB) that a CPU container never uses.
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
  && pip install --no-cache-dir -r requirements-local.txt
+
+# Optional, opt-in retrieval backends (FAISS + LlamaIndex). Build with:
+#   docker build --build-arg INSTALL_RAG=true .
+ARG INSTALL_RAG=false
+RUN if [ "$INSTALL_RAG" = "true" ]; then pip install --no-cache-dir -r requirements-rag.txt; fi
 
 COPY --chown=app:app . .
 RUN mkdir -p data storage logs && chown -R app:app data storage logs

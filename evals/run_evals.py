@@ -156,6 +156,8 @@ async def run(dataset: Path, report_path: Path) -> dict:
         "generated_at": datetime.now(UTC).isoformat(),
         "provider": settings.resolved_provider,
         "embedding_backend": workflow.rag.backend,
+        "vector_store": workflow.rag.vector_store_backend,
+        "ingest_backend": workflow.rag.ingest_backend,
         "dataset": str(dataset),
         "total": total,
         "passed": passed,
@@ -191,7 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"\n{report['passed']}/{report['total']} passed "
         f"({report['pass_rate']:.1%}) | provider={report['provider']} "
-        f"| embeddings={report['embedding_backend']}"
+        f"| embeddings={report['embedding_backend']} "
+        f"| vector={report['vector_store']} ingest={report['ingest_backend']}"
     )
     print(f"report: {args.report}")
 

@@ -5,7 +5,9 @@ is a design goal rather than a measured result, it says so.
 
 - Runtime: Python 3.11+ (`asyncio`), FastAPI, SQLite, `pydantic` v2.
 - Orchestration: explicit code in `agents_app/workflow.py`. No LangChain,
-  LlamaIndex, LangGraph, FAISS or subprocess MCP dependency is required.
+  LangGraph or subprocess MCP dependency is required, and the workflow is not
+  built on any framework. FAISS and LlamaIndex are **optional, opt-in** retrieval
+  backends (`requirements-rag.txt`); the default is dependency-free.
 - Offline default: deterministic mock LLM + hash embeddings. Optional local
   models are described in [`LOCAL_MODELS.md`](LOCAL_MODELS.md).
 
@@ -98,6 +100,35 @@ packed up to `CHUNK_SIZE` (default 1800 characters) with `CHUNK_OVERLAP`
 (default 200 characters). The overlap starts on a word boundary. The shipped
 seven documents currently produce seven chunks, so `RETRIEVAL_TOP_K=4` often
 returns most of the corpus; this is a demo-scale index, not a benchmark.
+
+`INGEST_BACKEND` selects the chunker:
+
+- `builtin` (default): the paragraph packer above, no dependency.
+- `llamaindex`: `SentenceSplitter` from the optional LlamaIndex package,
+  calibrated with a character tokenizer and a local sentence splitter so
+  `CHUNK_SIZE` / `CHUNK_OVERLAP` keep the same meaning. It does not download
+  tokenizer data.
+- `auto`: LlamaIndex when importable, otherwise builtin.
+
+Both return plain strings; embedding, tokenisation and scoring stay in
+`rag.py`. A failed optional import degrades to builtin rather than breaking
+retrieval.
+
+**Vector index.** `VECTOR_STORE` selects where the normalised vectors are
+searched:
+
+- `builtin` (default): exact dot-product scan over Python lists, no dependency.
+- `faiss`: optional FAISS `IndexFlatIP`, exact for these normalised vectors.
+  The index and a configuration fingerprint are cached under `INDEX_DIR`
+  (`index.faiss`, `index.meta.json`). A changed document, embedding backend or
+  chunk setting invalidates the cache and rebuilds.
+- `auto`: FAISS when importable, otherwise builtin.
+
+`IndexFlatIP` is exact, so ranking parity with the built-in scan is asserted in
+`tests/test_vector_store.py`. The measured gain is query latency at scale
+(about 459 ms to 1.2 ms p50 at 10,000 synthetic 256-dim vectors on the
+development machine); at seven chunks the two are equivalent. Persistence saves
+rebuild time but not model loading.
 
 **Embeddings.** Two backends:
 
@@ -225,8 +256,8 @@ sufficient for the documented single replica; it is not a multi-writer design.
 
 - `GET /health/live`: process + tool server. Failure returns 503 so the platform
   can restart a stuck single replica.
-- `GET /health/ready`: provider, index stats (documents, chunks, backend,
-  thresholds) and tool readiness.
+- `GET /health/ready`: provider, index stats (documents, chunks, embedding
+  backend, ingest backend, vector store, thresholds) and tool readiness.
 - `GET /metrics`: hand-written Prometheus exposition for turns, LLM calls,
   tokens, estimated cost, latency, outcomes, tool calls and feedback.
 - Every turn carries a `trace_id`, an outcome and a debug trace. `DEBUG_RESPONSES`
@@ -246,7 +277,8 @@ To scale horizontally, change these in order:
 
 1. Move sessions/audit/feedback to a shared database with conditional writes.
 2. Move rate limits to Redis (or a gateway).
-3. Make the index read-only and bake it into the image, or serve it from a
+3. Make the index read-only and bake it into the image, persist the optional
+   FAISS index (`VECTOR_STORE=faiss`, `INDEX_DIR`), or serve it from an external
    vector store.
 4. Replace the in-memory tool server with a real service that keeps the same
    ownership checks and idempotency key.
@@ -271,3 +303,22 @@ writes `evals/report.json` and exits non-zero below `--min-pass`.
   human still writes the expectations.
 - The dataset is small and synthetic. It is a regression gate, not a benchmark
   of real-world answer quality.
+
+`evals/run_retrieval.py` is a separate retrieval gate. It builds the index with
+whatever `EMBEDDING_BACKEND` / `VECTOR_STORE` / `INGEST_BACKEND` is configured,
+ranks `evals/retrieval_cases.jsonl` (15 labelled queries) and reports
+recall@1/@3/@5 and MRR. The same cases run against builtin and optional
+backends, which is how backend parity is checked:
+
+```bash
+python -m evals.run_retrieval --min-recall 0.8
+VECTOR_STORE=faiss INGEST_BACKEND=llamaindex python -m evals.run_retrieval
+```
+
+At the current seven-document corpus both paths score 100% on this set. That
+mostly proves the gate itself works; it is not evidence that FAISS or
+LlamaIndex improve answer quality at this scale.
+
+`evals/benchmark_rag.py` isolates the vector store: synthetic normalised
+vectors, build time and top-10 query latency. It is a measurement tool, not a
+pass/fail gate.

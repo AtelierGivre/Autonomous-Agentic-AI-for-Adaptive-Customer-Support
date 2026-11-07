@@ -12,6 +12,7 @@ installed the hash embedder keeps the whole pipeline runnable offline.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from pathlib import Path
 from agents_app.config import Settings
 from agents_app.config import settings as default_settings
 from agents_app.guardrails import looks_suspicious_document
+from agents_app.ingest import make_ingestor
+from agents_app.vector_store import make_vector_store
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = {
@@ -84,10 +87,6 @@ def _hash_embed(tokens: list[str], dim: int = 256) -> list[float]:
     return [v / norm for v in vector]
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b, strict=True))
-
-
 class _HFEmbedder:
     def __init__(self, model_name: str) -> None:
         from sentence_transformers import SentenceTransformer
@@ -120,6 +119,12 @@ class KnowledgeBase:
         self._avg_len = 1.0
         self._df: dict[str, int] = {}
         self._min_score = self.settings.min_retrieval_score
+        self._ingestor = make_ingestor(
+            self.settings.ingest_backend,
+            self.settings.chunk_size,
+            self.settings.chunk_overlap,
+        )
+        self._vector_store = make_vector_store(self.settings.vector_store)
         self.build()
 
     # ------------------------------------------------------------------ indexing
@@ -142,31 +147,30 @@ class KnowledgeBase:
     def _current_signature(self) -> tuple:
         return tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in self._files())
 
-    def _tail_overlap(self, text: str) -> str:
-        size = self.settings.chunk_overlap
-        if not size:
-            return ""
-        tail = text[-size:]
-        # Start on a word boundary so a chunk never opens with a half word.
-        if " " not in tail:
-            return ""
-        return tail[tail.index(" ") + 1 :].strip()
-
     def _split(self, text: str) -> list[str]:
-        text = re.sub(r"[ \t]+", " ", text).strip()
-        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-        chunks: list[str] = []
-        current = ""
-        for paragraph in paragraphs:
-            if current and len(current) + len(paragraph) + 2 > self.settings.chunk_size:
-                chunks.append(current)
-                overlap = self._tail_overlap(current)
-                current = f"{overlap}\n\n{paragraph}".strip()
-            else:
-                current = f"{current}\n\n{paragraph}".strip()
-        if current:
-            chunks.append(current)
-        return chunks or [text]
+        return self._ingestor.split(text)
+
+    @property
+    def ingest_backend(self) -> str:
+        return self._ingestor.name
+
+    @property
+    def vector_store_backend(self) -> str:
+        return self._vector_store.name
+
+    def _fingerprint(self) -> str:
+        """Identity of the corpus plus the retrieval configuration."""
+        payload = {
+            "files": self._signature,
+            "embedding": self.backend,
+            "hf_model": self.settings.hf_embedding_model if self.backend == "hf" else "",
+            "ingestor": self._ingestor.name,
+            "chunk_size": self.settings.chunk_size,
+            "chunk_overlap": self.settings.chunk_overlap,
+            "vector_store": self._vector_store.name,
+        }
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
 
     def build(self) -> None:
         self._resolve_embedder()
@@ -179,18 +183,28 @@ class KnowledgeBase:
                     continue
                 documents.append((path.name, chunk_text))
 
-        if self._embedder and documents:
-            vectors = self._embedder.encode([text for _, text in documents])
-            self.chunks = [
-                Chunk(source=source, text=text, tokens=tokenize(text), vector=vector)
-                for (source, text), vector in zip(documents, vectors, strict=True)
-            ]
-        else:
-            self.backend = "hash"
-            self.chunks = [
-                Chunk(source=source, text=text, tokens=tokenize(text), vector=_hash_embed(tokenize(text)))
-                for source, text in documents
-            ]
+        fingerprint = self._fingerprint()
+        vectors: list[list[float]] | None = None
+        if self._vector_store.name == "faiss" and self.settings.persist_index:
+            if self._vector_store.load(Path(self.settings.index_dir), fingerprint):
+                vectors = self._vector_store.vectors()
+                if len(vectors) != len(documents):
+                    vectors = None
+
+        if vectors is None:
+            if self._embedder and documents:
+                vectors = self._embedder.encode([text for _, text in documents])
+            else:
+                self.backend = "hash"
+                vectors = [_hash_embed(tokenize(text)) for _, text in documents]
+            self._vector_store.build(vectors)
+            if self._vector_store.name == "faiss" and self.settings.persist_index:
+                self._vector_store.save(Path(self.settings.index_dir), fingerprint)
+
+        self.chunks = [
+            Chunk(source=source, text=text, tokens=tokenize(text), vector=vector)
+            for (source, text), vector in zip(documents, vectors, strict=True)
+        ]
 
         # BM25 corpus statistics.
         self._df = {}
@@ -251,9 +265,13 @@ class KnowledgeBase:
             self._embedder.encode([query])[0] if self._embedder else _hash_embed(query_tokens)
         )
 
-        vector_scores = [_cosine(query_vector, chunk.vector) for chunk in self.chunks]
+        vector_scores = [0.0] * len(self.chunks)
+        vector_rank: list[int] = []
+        for index, score in self._vector_store.search(query_vector):
+            if 0 <= index < len(self.chunks):
+                vector_scores[index] = score
+                vector_rank.append(index)
         lexical_scores = self._bm25(query_tokens)
-        vector_rank = sorted(range(len(self.chunks)), key=lambda i: vector_scores[i], reverse=True)
         lexical_rank = sorted(range(len(self.chunks)), key=lambda i: lexical_scores[i], reverse=True)
         fused = [0.0] * len(self.chunks)
         for ranking, weight in ((vector_rank, 0.65), (lexical_rank, 0.35)):
@@ -303,7 +321,10 @@ class KnowledgeBase:
             "files": len(self._files()),
             "chunks": len(self.chunks),
             "backend": self.backend,
+            "ingest_backend": self._ingestor.name,
+            "vector_store": self._vector_store.name,
             "ready": self.is_ready(),
             "min_score": self._min_score,
             "min_coverage": self.settings.min_lexical_coverage,
+            "index": self._vector_store.stats(),
         }

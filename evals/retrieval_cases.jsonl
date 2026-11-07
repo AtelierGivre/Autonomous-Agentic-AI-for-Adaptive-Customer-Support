@@ -1,0 +1,17 @@
+# Labelled retrieval cases: id, query and the document(s) that can answer it.
+# The set is small on purpose; it is a regression gate for ranking changes.
+{"id": "password-reset", "query": "How do I reset my password?", "expected_sources": ["account.md"]}
+{"id": "change-email", "query": "Can I change the email address on my account?", "expected_sources": ["account.md"]}
+{"id": "two-factor-recovery", "query": "Where are the two-factor recovery codes?", "expected_sources": ["account.md"]}
+{"id": "duplicate-charge", "query": "I see a duplicate charge on my card", "expected_sources": ["billing.md"]}
+{"id": "gst-invoice", "query": "Where can I download the GST invoice?", "expected_sources": ["billing.md"]}
+{"id": "refund-timing", "query": "How many days does a refund take to reach my card?", "expected_sources": ["billing.md", "returns.md"]}
+{"id": "return-consumables", "query": "Can I return opened consumables?", "expected_sources": ["returns.md"]}
+{"id": "damaged-item", "query": "How long do I have to report a damaged item?", "expected_sources": ["returns.md"]}
+{"id": "standard-delivery", "query": "How long does standard delivery take?", "expected_sources": ["shipping.md"]}
+{"id": "delayed-parcel", "query": "My parcel has not moved for 5 business days", "expected_sources": ["shipping.md"]}
+{"id": "amber-led", "query": "The router internet LED is flashing amber", "expected_sources": ["router-troubleshooting.md"]}
+{"id": "factory-reset", "query": "How do I factory reset the router?", "expected_sources": ["router-troubleshooting.md"]}
+{"id": "warranty-period", "query": "What is the warranty period for networking hardware?", "expected_sources": ["warranty.md"]}
+{"id": "escalation", "query": "When should I escalate to a human?", "expected_sources": ["escalation.md"]}
+{"id": "support-hours", "query": "What are the chat support hours?", "expected_sources": ["escalation.md"]}

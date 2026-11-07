@@ -89,6 +89,16 @@ class Settings:
     retrieval_top_k: int = field(default_factory=lambda: _int("RETRIEVAL_TOP_K", 4))
     chunk_size: int = field(default_factory=lambda: _int("CHUNK_SIZE", 1800))
     chunk_overlap: int = field(default_factory=lambda: _int("CHUNK_OVERLAP", 200))
+    # builtin = exact in-process scan (no dependency, default).
+    # faiss   = optional FAISS IndexFlatIP; auto = FAISS when importable.
+    vector_store: str = field(default_factory=lambda: _env("VECTOR_STORE", "builtin").lower())
+    # builtin = paragraph packer (no dependency, default).
+    # llamaindex = optional SentenceSplitter; auto = LlamaIndex when importable.
+    ingest_backend: str = field(default_factory=lambda: _env("INGEST_BACKEND", "builtin").lower())
+    index_dir: str = field(
+        default_factory=lambda: _env("INDEX_DIR", str(ROOT / "data" / "index"))
+    )
+    persist_index: bool = field(default_factory=lambda: _bool("PERSIST_INDEX", True))
 
     # --- LLM routing ---
     llm_provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "auto").lower())
@@ -157,6 +167,8 @@ class Settings:
             "environment": self.environment,
             "provider": self.resolved_provider,
             "embedding_backend": self.embedding_backend,
+            "vector_store": self.vector_store,
+            "ingest_backend": self.ingest_backend,
             "auth": "on" if self.api_keys else "off (dev only)",
             "debug_responses": self.debug_responses,
         }

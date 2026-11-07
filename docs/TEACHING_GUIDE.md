@@ -26,7 +26,7 @@ the orchestration, retrieval, tools and guards are the real ones.
 python -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-python -m pytest -q                 # 100 tests, no keys, no network
+python -m pytest -q                 # 116 tests, no keys, no network
 ```
 
 Run the terminal client in offline mode:

@@ -1,0 +1,11 @@
+# Optional retrieval backends. The offline demo and base install do not need
+# these; install them only when you want a FAISS vector index or LlamaIndex
+# sentence-aware chunking.
+#
+#   pip install -r requirements-rag.txt
+#
+# FAISS is an exact inner-product index for these normalised vectors, so it
+# returns the same ranking as the built-in scorer. The benefit is persistence
+# and speed at larger corpus sizes, not a different answer at 7 documents.
+faiss-cpu>=1.8,<2
+llama-index-core>=0.14,<0.15

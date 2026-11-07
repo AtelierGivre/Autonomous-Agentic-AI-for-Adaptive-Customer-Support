@@ -3,7 +3,10 @@
 __pycache__/
 storage/
 data/*.db*
+data/index/
 logs/*.jsonl
 evals/report.json
+evals/retrieval_report.json
+evals/benchmark_report.json
 .pytest_cache/
 .ruff_cache/

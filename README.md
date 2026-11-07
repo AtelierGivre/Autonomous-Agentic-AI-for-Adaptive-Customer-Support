@@ -103,6 +103,8 @@ uvicorn api:app --port 8000                            # web UI at http://localh
 
 The base install uses a deterministic hash embedder, so the first run needs **no model download**. For Hugging Face embeddings or an in-process local LLM, install the optional extras: `pip install -r requirements-local.txt` (about 130 MB for the default embedding model, plus the model you choose).
 
+For a persistent FAISS index or LlamaIndex sentence-aware chunking, install the opt-in RAG extras: `pip install -r requirements-rag.txt`, then set `VECTOR_STORE=faiss` and/or `INGEST_BACKEND=llamaindex`. The default stays the dependency-free built-in path, so the base install and the offline tests are unchanged.
+
 **No key yet?** Run the whole pipeline offline with the fake LLM (canned answers, everything else real):
 
 ```bash
@@ -142,13 +144,45 @@ The agents, guardrails, retrieval and tests are identical. What changes is quali
 
 Fake demo orders: `ORD-1001` (delivered), `ORD-1002` (in transit), `ORD-1003` (delayed). Open "What the agents did" in the web UI, or `/metrics`, to see latency, tokens and cost per agent.
 
+## Optional retrieval backends (FAISS + LlamaIndex)
+
+The safety-critical path is still the same explicit `asyncio` workflow and the same hybrid BM25 + vector scoring. Only two edges are pluggable, and both default to the dependency-free implementation.
+
+| Setting | Default | Optional value | What changes |
+|---|---|---|---|
+| `VECTOR_STORE` | `builtin` | `faiss`, `auto` | Where the normalised chunk vectors are searched. `auto` uses FAISS when importable. |
+| `INGEST_BACKEND` | `builtin` | `llamaindex`, `auto` | How markdown is chunked. `auto` uses LlamaIndex when importable. |
+
+**FAISS is an exact index here, not an approximate one.** `IndexFlatIP` over the same L2-normalised vectors returns the same ranking as the built-in dot-product scan; `tests/test_vector_store.py` asserts that parity. The gain is speed and persistence at scale, not a different answer at the shipped seven chunks.
+
+Measured on this machine (256-dim synthetic vectors, top-10, 20 queries; `make bench-rag`):
+
+| Vectors | Built-in p50 | FAISS p50 | Built-in build | FAISS build |
+|---:|---:|---:|---:|---:|
+| 1,000 | 45.6 ms | 0.11 ms | 0.09 s | 0.09 s |
+| 10,000 | 458.7 ms | 1.24 ms | 0.82 s | 0.89 s |
+
+The FAISS index is cached under `INDEX_DIR` (`data/index/` by default) as `index.faiss` + `index.meta.json`. The metadata fingerprint covers the knowledge-base files and the embedding/chunking configuration, so editing a document or changing models rebuilds instead of serving stale vectors.
+
+**LlamaIndex ingestion is calibrated in characters, not tokens.** `SentenceSplitter` is given a character tokenizer and a local sentence splitter, so `CHUNK_SIZE` / `CHUNK_OVERLAP` keep exactly the same meaning as the built-in paragraph packer. It does not download `tiktoken` or NLTK data at import or query time.
+
+Both backends are measured against a small labelled set (`evals/retrieval_cases.jsonl`, 15 queries) with recall@1/@3/@5 and MRR:
+
+```bash
+python -m evals.run_retrieval --min-recall 0.8
+VECTOR_STORE=faiss INGEST_BACKEND=llamaindex python -m evals.run_retrieval
+```
+
+At the current seven-document corpus both paths score 100% on that set, which mostly proves the gate works rather than proving one chunker is better. The set exists to catch ranking regressions when documents, thresholds or backends change. It is not a benchmark of real-world retrieval quality.
+
 ## Quality gates
 
 ```bash
 pip install -r requirements-dev.txt
 ruff check .                                # lint
-pytest -q                                   # 100 offline tests (no keys, network or torch)
+pytest -q                                   # 116 offline tests (no keys, network or torch)
 python -m evals.run_evals --min-pass 0.9    # golden-dataset quality gate (26 cases)
+python -m evals.run_retrieval --min-recall 0.8   # labelled retrieval gate (recall@k, MRR)
 # or simply:  make check
 ```
 
@@ -188,6 +222,8 @@ Builds the Dockerfile in Azure Container Apps with secrets stored as secret refe
 | `agents_app/agents.py` | The five agents, each with one job, prompt and model tier |
 | `agents_app/workflow.py` | Orchestration: guards, parallel execution, confidence gate, confirmation, verify/revise, degradation |
 | `agents_app/rag.py` | Hybrid retrieval (embedding + BM25 with reciprocal rank fusion, optional Hugging Face embeddings), confidence score, auto re-index |
+| `agents_app/vector_store.py` | Pluggable exact vector index: built-in scan (default) and optional persisted FAISS `IndexFlatIP` |
+| `agents_app/ingest.py` | Pluggable chunking: built-in paragraph packer (default) and optional LlamaIndex `SentenceSplitter`, both in characters |
 | `agents_app/mcp_server.py`, `mcp_client.py` | MCP-compatible tools (read/write annotated, JSON-RPC) and a validating, timeout-guarded client |
 | `agents_app/llm.py`, `resilience.py` | Model routing (Azure OpenAI, OpenAI-compatible, in-process Transformers, mock), retries, circuit breaker, budgets, validated JSON output |
 | `agents_app/security.py`, `guardrails.py` | PII redaction, injection screen, auth, rate limiting |
@@ -219,4 +255,4 @@ More detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), section 6.
 
 ## Versions
 
-Developed and tested on Python 3.11+ (3.14 in this workspace) with fastapi 0.162, pydantic 2.x, prometheus-client, python-dotenv and openai. Optional: transformers and sentence-transformers for local models and Hugging Face embeddings. There is no LangChain, LlamaIndex, FAISS or subprocess MCP dependency.
+Developed and tested on Python 3.11+ (3.14 in this workspace) with fastapi 0.162, pydantic 2.x, prometheus-client, python-dotenv and openai. Optional: transformers and sentence-transformers for local models and Hugging Face embeddings; FAISS and LlamaIndex for the opt-in retrieval backends (`requirements-rag.txt`). The base install does not need FAISS, LlamaIndex, LangChain or a subprocess MCP dependency, and the agent workflow is not built on any of them.
