@@ -1,22 +1,8 @@
-# Version ranges the project is developed against (see README, "Versions").
-# --- Agent framework / LLM ---
-langchain-core>=1.7,<2
-langchain-openai>=1.7,<2        # AzureChatOpenAI + ChatOpenAI (also talks to local Ollama/vLLM servers)
-transformers>=4.56               # in-process local model (LLM_PROVIDER=local); `dtype=` needs >= 4.56
-
-# --- Retrieval: LlamaIndex + FAISS + Hugging Face embeddings ---
-llama-index-core>=0.14,<0.15
-llama-index-vector-stores-faiss>=0.7,<0.8
-llama-index-embeddings-huggingface>=0.6   # pulls sentence-transformers + torch (~1 GB)
-faiss-cpu>=1.8,<2
-
-# --- MCP (tool protocol). Pinned to 1.x: 2.x renamed FastMCP ---
-mcp>=1.9,<2
-
-# --- API / config ---
+# Runtime dependencies for the offline demo and the HTTP API.
+# Optional model backends live in requirements-local.txt.
 fastapi>=0.110,<1
 uvicorn>=0.29,<1
 pydantic>=2.5,<3
 prometheus-client>=0.20,<1
-jsonschema>=4.20,<5
 python-dotenv>=1.0,<2
+openai>=1.40,<2          # Azure OpenAI, OpenAI, and OpenAI-compatible local servers

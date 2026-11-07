@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic Customer Support</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">◆</span>
+      <div>
+        <h1>Agentic Support</h1>
+        <p>planner · retriever · tools · troubleshooter · verifier</p>
+      </div>
+    </div>
+    <div class="health" id="health"><span class="dot"></span><span id="health-text">checking…</span></div>
+  </header>
+
+  <main class="layout">
+    <section class="chat-panel">
+      <div class="log" id="log" aria-live="polite"></div>
+
+      <div class="suggestions" id="suggestions">
+        <button type="button" data-q="My router keeps disconnecting">Router keeps dropping</button>
+        <button type="button" data-q="Where is my order ORD-1003?">Track ORD-1003</button>
+        <button type="button" data-q="How do refunds work?">Refund policy</button>
+        <button type="button" data-q="Nothing worked, escalate to a human">Talk to a human</button>
+      </div>
+
+      <form class="composer" id="composer">
+        <label class="sr-only" for="message">Message</label>
+        <textarea id="message" rows="1" maxlength="4000" placeholder="Ask about an order, a policy, or a device…" required></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+      <p class="disclaimer">Demo data only. Never share passwords, full card numbers or one-time codes.</p>
+    </section>
+
+    <aside class="side-panel">
+      <div class="side-head">
+        <h2>What the agents did</h2>
+        <button type="button" class="ghost" id="clear">Clear</button>
+      </div>
+      <div class="steps" id="steps"><p class="muted">Send a message to watch the plan unfold.</p></div>
+      <details class="debug">
+        <summary>Raw debug (dev mode)</summary>
+        <pre id="debug">—</pre>
+      </details>
+      <div class="meta">
+        <span id="session">session —</span>
+        <span id="trace">trace —</span>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

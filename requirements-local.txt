@@ -1,0 +1,12 @@
+# Optional heavy dependencies. Install these only when you want real local
+# models and Hugging Face embeddings:
+#
+#   pip install -r requirements-local.txt
+#
+# Without them the app runs fully offline with the mock LLM and deterministic
+# hash embeddings, which is what the test suite and CI use.
+-r requirements.txt
+
+transformers>=4.56           # in-process local LLM (LLM_PROVIDER=local)
+accelerate>=0.26            # device_map="auto" for LOCAL_DEVICE=auto
+sentence-transformers>=3.0  # Hugging Face embeddings (EMBEDDING_BACKEND=hf)

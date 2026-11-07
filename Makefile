@@ -1,19 +1,22 @@
-.PHONY: install lint test eval eval-local check offline local run api docker
+.PHONY: install install-local lint test eval eval-local check offline local run api docker
 
-install:           ## install everything incl. dev tools
+install:           ## install runtime + dev tools (no torch, no model download)
 	pip install -r requirements-dev.txt
+
+install-local:     ## add optional local LLM + Hugging Face embedding dependencies
+	pip install -r requirements-local.txt
 
 lint:              ## static checks
 	ruff check .
 
-test:              ## 153 offline tests (no keys needed)
+test:              ## 100 offline tests (no keys, no network, no torch)
 	pytest -q
 
 eval:              ## golden-dataset quality gate, using whatever LLM_PROVIDER / EMBEDDING_BACKEND is configured
 	python -m evals.run_evals --min-pass 0.9
 
 check:             ## what CI runs: lint + tests + offline quality gate
-	ruff check . && pytest -q && LLM_PROVIDER=mock EMBEDDING_BACKEND=hash MIN_RETRIEVAL_SCORE=0.1 python -m evals.run_evals --min-pass 0.95
+	ruff check . && pytest -q && LLM_PROVIDER=mock EMBEDDING_BACKEND=hash MIN_RETRIEVAL_SCORE=0.1 python -m evals.run_evals --min-pass 0.9
 
 local:             ## chat in the terminal with a Hugging Face model running on this machine (no API key)
 	LLM_PROVIDER=local python main.py

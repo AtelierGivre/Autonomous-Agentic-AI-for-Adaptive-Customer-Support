@@ -24,7 +24,7 @@ BANNER = """
 async def main() -> None:
     setup_logging()
     wf = SupportWorkflow()
-    print("Starting (connecting MCP tools, loading FAISS index)...")
+    print("Starting (connecting MCP tools, loading knowledge index)...")
     await wf.start()
     print(BANNER)
     memory = ConversationMemory()

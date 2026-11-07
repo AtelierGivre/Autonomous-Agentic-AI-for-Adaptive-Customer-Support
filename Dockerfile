@@ -7,17 +7,17 @@ WORKDIR /app
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 app
 
-COPY requirements.txt .
+COPY requirements.txt requirements-local.txt ./
 # CPU-only torch: the default PyPI wheel bundles CUDA libraries (+2 GB) that a CPU container never uses.
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
- && pip install --no-cache-dir -r requirements.txt
+ && pip install --no-cache-dir -r requirements-local.txt
 
 COPY --chown=app:app . .
 RUN mkdir -p data storage logs && chown -R app:app data storage logs
 USER app
 
-# Bake the embedding model + FAISS index into the image so start-up is fast and deterministic,
-# then forbid runtime downloads.
+# Bake the embedding model + knowledge index into the image so start-up is fast
+# and deterministic, then forbid runtime downloads.
 RUN EMBEDDING_BACKEND=hf python -c "from agents_app.rag import KnowledgeBase; KnowledgeBase()"
 ENV HF_HUB_OFFLINE=1
 
