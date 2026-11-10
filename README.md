@@ -255,4 +255,4 @@ More detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), section 6.
 
 ## Versions
 
-Developed and tested on Python 3.11+ (3.14 in this workspace) with fastapi 0.162, pydantic 2.x, prometheus-client, python-dotenv and openai. Optional: transformers and sentence-transformers for local models and Hugging Face embeddings; FAISS and LlamaIndex for the opt-in retrieval backends (`requirements-rag.txt`). The base install does not need FAISS, LlamaIndex, LangChain or a subprocess MCP dependency, and the agent workflow is not built on any of them.
+Developed and tested on Python 3.11+ (3.14 in this workspace) with fastapi 0.162, pydantic 2.x, prometheus-client, python-dotenv and openai. Optional: transformers and sentence-transformers for local models and Hugging Face embeddings; FAISS and LlamaIndex for the opt-in retrieval backends (`requirements-rag.txt`). 
